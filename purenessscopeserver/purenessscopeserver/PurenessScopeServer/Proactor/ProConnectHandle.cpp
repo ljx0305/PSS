@@ -1,7 +1,5 @@
 #include "ProConnectHandle.h"
 
-Mutex_Allocator _msg_prosend_mb_allocator;
-
 CProConnectHandle::CProConnectHandle(void)
 {
 	m_szError[0]          = '\0';
@@ -117,7 +115,8 @@ bool CProConnectHandle::Close(int nIOCount, int nErrno)
 		objMakePacket.m_pPacketParse      = NULL;
 
 		//发送客户端链接断开消息。
-		if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_CDISCONNECT, &objMakePacket))
+		ACE_Time_Value tvNow = ACE_OS::gettimeofday();
+		if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_CDISCONNECT, &objMakePacket, tvNow))
 		{
 			OUR_DEBUG((LM_ERROR, "[CProConnectHandle::Close] ConnectID = %d, PACKET_CONNECT is error.\n", GetConnectID()));
 		}
@@ -160,7 +159,8 @@ bool CProConnectHandle::ServerClose(EM_Client_Close_status emStatus)
 		objMakePacket.m_pPacketParse      = NULL;
 
 		//发送服务器端链接断开消息。
-		if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SDISCONNECT, &objMakePacket))
+		ACE_Time_Value tvNow = ACE_OS::gettimeofday();
+		if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SDISCONNECT, &objMakePacket, tvNow))
 		{
 			OUR_DEBUG((LM_ERROR, "[CProConnectHandle::ServerClose]ConnectID = %d, PACKET_SDISCONNECT is error.\n", GetConnectID()));
 			return false;
@@ -320,7 +320,8 @@ void CProConnectHandle::open(ACE_HANDLE h, ACE_Message_Block&)
 	objMakePacket.m_pPacketParse      = NULL;
 
 	//发送链接建立消息。
-	if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_CONNECT, &objMakePacket))
+	ACE_Time_Value tvNow = ACE_OS::gettimeofday();
+	if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_CONNECT, &objMakePacket, tvNow))
 	{
 		OUR_DEBUG((LM_ERROR, "[CProConnectHandle::open] ConnectID = %d, PACKET_CONNECT is error.\n", GetConnectID()));
 	}
@@ -466,7 +467,8 @@ void CProConnectHandle::handle_read_stream(const ACE_Asynch_Read_Stream::Result 
 
 					//因为是要关闭连接，所以要多关闭一次IO，对应Open设置的1的初始值
 					//发送服务器端链接断开消息。
-					if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SDISCONNECT, &objMakePacket))
+					ACE_Time_Value tvNow = ACE_OS::gettimeofday();
+					if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SDISCONNECT, &objMakePacket, tvNow))
 					{
 						OUR_DEBUG((LM_ERROR, "[CProConnectHandle::open] ConnectID = %d, PACKET_CONNECT is error.\n", GetConnectID()));
 					}
@@ -546,7 +548,8 @@ void CProConnectHandle::handle_read_stream(const ACE_Asynch_Read_Stream::Result 
 
 				//因为是要关闭连接，所以要多关闭一次IO，对应Open设置的1的初始值
 				//发送服务器端链接断开消息。
-				if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SDISCONNECT, &objMakePacket))
+				ACE_Time_Value tvNow = ACE_OS::gettimeofday();
+				if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SDISCONNECT, &objMakePacket, tvNow))
 				{
 					OUR_DEBUG((LM_ERROR, "[CProConnectHandle::open] ConnectID = %d, PACKET_CONNECT is error.\n", GetConnectID()));
 				}
@@ -597,7 +600,8 @@ void CProConnectHandle::handle_read_stream(const ACE_Asynch_Read_Stream::Result 
 
 					//因为是要关闭连接，所以要多关闭一次IO，对应Open设置的1的初始值
 					//发送服务器端链接断开消息。
-					if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SDISCONNECT, &objMakePacket))
+					ACE_Time_Value tvNow = ACE_OS::gettimeofday();
+					if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SDISCONNECT, &objMakePacket, tvNow))
 					{
 						OUR_DEBUG((LM_ERROR, "[CProConnectHandle::open] ConnectID = %d, PACKET_CONNECT is error.\n", GetConnectID()));
 					}
@@ -657,9 +661,9 @@ void CProConnectHandle::handle_write_stream(const ACE_Asynch_Write_Stream::Resul
 		m_atvOutput = ACE_OS::gettimeofday();
 		//App_MessageBlockManager::instance()->Close(&result.message_block());
 		//错误消息回调
-		App_MakePacket::instance()->PutSendErrorMessage(GetConnectID(), &result.message_block());
+		App_MakePacket::instance()->PutSendErrorMessage(GetConnectID(), &result.message_block(), m_atvOutput);
 
-		App_MessageBlockManager::instance()->Close(&result.message_block());
+		//App_MessageBlockManager::instance()->Close(&result.message_block());
 
 		return;
 	}
@@ -737,7 +741,8 @@ bool CProConnectHandle::SetSendQueueTimeCost(uint32 u4TimeCost)
 		objMakePacket.m_pPacketParse      = NULL;
 
 		//告诉插件连接发送超时阀值报警
-		if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SEND_TIMEOUT, &objMakePacket))
+		ACE_Time_Value tvNow = ACE_OS::gettimeofday();
+		if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_SEND_TIMEOUT, &objMakePacket, tvNow))
 		{
 			OUR_DEBUG((LM_ERROR, "[CProConnectHandle::open] ConnectID = %d, PACKET_CONNECT is error.\n", GetConnectID()));
 		}
@@ -1105,7 +1110,8 @@ bool CProConnectHandle::CheckMessage()
 		}
 
 		//将数据Buff放入消息体中，传递给MakePacket处理。
-		if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_PARSE, &objMakePacket))
+		ACE_Time_Value tvNow = ACE_OS::gettimeofday();
+		if(false == App_MakePacket::instance()->PutMessageBlock(GetConnectID(), PACKET_PARSE, &objMakePacket, tvNow))
 		{
 			OUR_DEBUG((LM_ERROR, "[CProConnectHandle::CheckMessage] ConnectID = %d, PutMessageBlock is error.\n", GetConnectID()));
 		}
@@ -1117,13 +1123,6 @@ bool CProConnectHandle::CheckMessage()
 	{
 		OUR_DEBUG((LM_ERROR, "[CProConnectHandle::CheckMessage] ConnectID = %d, m_pPacketParse is NULL.\n", GetConnectID()));
 	}
-
-	/*
-	//测试代码
-	m_pPacketParse->GetMessageHead()->release();
-	m_pPacketParse->GetMessageBody()->release();
-	App_PacketParsePool::instance()->Delete(m_pPacketParse);
-	*/
 
 	return true;
 }
@@ -1418,35 +1417,19 @@ bool CProConnectManager::SendMessage(uint32 u4ConnectID, IBuffPacket* pBuffPacke
 bool CProConnectManager::PostMessage(uint32 u4ConnectID, IBuffPacket* pBuffPacket, uint8 u1SendType, uint16 u2CommandID, bool blSendState, bool blDelete)
 {
 	//OUR_DEBUG((LM_ERROR,"[CProConnectManager::PutMessage]BEGIN.\n"));
+	//放入发送队列
+	_SendMessage* pSendMessage = m_SendMessagePool.Create();
+
 	if(NULL == pBuffPacket)
 	{
 		OUR_DEBUG((LM_ERROR,"[CProConnectManager::PutMessage] pBuffPacket is NULL.\n"));
 		return false;
 	}
 
-	//ACE_Message_Block* mb = App_MessageBlockManager::instance()->Create(sizeof(_SendMessage*));
-	ACE_Message_Block* mb = NULL;
-
-	ACE_NEW_MALLOC_NORETURN(mb, 
-		static_cast<ACE_Message_Block*>(_msg_prosend_mb_allocator.malloc(sizeof(ACE_Message_Block))),
-		ACE_Message_Block(sizeof(_SendMessage*), // size
-		ACE_Message_Block::MB_DATA, // type
-		0,
-		0,
-		&_msg_prosend_mb_allocator, // allocator_strategy
-		0, // locking strategy
-		ACE_DEFAULT_MESSAGE_BLOCK_PRIORITY, // priority
-		ACE_Time_Value::zero,
-		ACE_Time_Value::max_time,
-		&_msg_prosend_mb_allocator,
-		&_msg_prosend_mb_allocator
-		));
+	ACE_Message_Block* mb = pSendMessage->GetQueueMessage();
 
 	if(NULL != mb)
 	{
-		//放入发送队列
-		_SendMessage* pSendMessage = m_SendMessagePool.Create();
-
 		if(NULL == pSendMessage)
 		{
 			OUR_DEBUG((LM_ERROR,"[CProConnectManager::PutMessage] new _SendMessage is error.\n"));
@@ -1465,9 +1448,6 @@ bool CProConnectManager::PostMessage(uint32 u4ConnectID, IBuffPacket* pBuffPacke
 		pSendMessage->m_blDelete    = blDelete;
 		pSendMessage->m_tvSend      = ACE_OS::gettimeofday();
 
-		_SendMessage** ppSendMessage = (_SendMessage **)mb->base();
-		*ppSendMessage = pSendMessage;
-
 		//判断队列是否是已经最大
 		int nQueueCount = (int)msg_queue()->message_count();
 		if(nQueueCount >= (int)MAX_MSG_THREADQUEUE)
@@ -1477,7 +1457,6 @@ bool CProConnectManager::PostMessage(uint32 u4ConnectID, IBuffPacket* pBuffPacke
 			{
 				App_BuffPacketManager::instance()->Delete(pBuffPacket);
 			}
-			mb->release();
 			return false;
 		}
 
@@ -1489,7 +1468,6 @@ bool CProConnectManager::PostMessage(uint32 u4ConnectID, IBuffPacket* pBuffPacke
 			{
 				App_BuffPacketManager::instance()->Delete(pBuffPacket);
 			}
-			mb->release();
 			return false;
 		}
 	}
@@ -1703,7 +1681,6 @@ int CProConnectManager::svc (void)
 		_SendMessage* msg = *((_SendMessage**)mb->base());
 		if (! msg)
 		{
-			mb->release();
 			continue;
 		}
 
@@ -1711,7 +1688,6 @@ int CProConnectManager::svc (void)
 		SendMessage(msg->m_u4ConnectID, msg->m_pBuffPacket, msg->m_u2CommandID, msg->m_blSendState, msg->m_nEvents, msg->m_tvSend, msg->m_blDelete);
 		m_SendMessagePool.Delete(msg);
 
-		mb->release();
 	}
 
 	OUR_DEBUG((LM_INFO,"[CProConnectManager::svc] svc finish!\n"));
@@ -1835,28 +1811,14 @@ bool CProConnectManager::PostMessageAll( IBuffPacket* pBuffPacket, uint8 u1SendT
 		pCurrBuffPacket->WriteStream(pBuffPacket->GetData(), pBuffPacket->GetPacketLen());
 
 		u4ConnectID = objveCProConnectManager[i];
-		ACE_Message_Block* mb = NULL;
 
-		ACE_NEW_MALLOC_NORETURN(mb, 
-			static_cast<ACE_Message_Block*>(_msg_prosend_mb_allocator.malloc(sizeof(ACE_Message_Block))),
-			ACE_Message_Block(sizeof(_SendMessage*), // size
-			ACE_Message_Block::MB_DATA, // type
-			0,
-			0,
-			&_msg_prosend_mb_allocator, // allocator_strategy
-			0, // locking strategy
-			ACE_DEFAULT_MESSAGE_BLOCK_PRIORITY, // priority
-			ACE_Time_Value::zero,
-			ACE_Time_Value::max_time,
-			&_msg_prosend_mb_allocator,
-			&_msg_prosend_mb_allocator
-			));
+		//放入发送队列
+		_SendMessage* pSendMessage = m_SendMessagePool.Create();
+
+		ACE_Message_Block* mb = pSendMessage->GetQueueMessage();
 
 		if(NULL != mb)
 		{
-			//放入发送队列
-			_SendMessage* pSendMessage = m_SendMessagePool.Create();
-
 			if(NULL == pSendMessage)
 			{
 				OUR_DEBUG((LM_ERROR,"[CProConnectManager::PutMessage] new _SendMessage is error.\n"));
@@ -1872,9 +1834,6 @@ bool CProConnectManager::PostMessageAll( IBuffPacket* pBuffPacket, uint8 u1SendT
 			pSendMessage->m_blDelete    = blDelete;
 			pSendMessage->m_tvSend      = ACE_OS::gettimeofday();
 
-			_SendMessage** ppSendMessage = (_SendMessage **)mb->base();
-			*ppSendMessage = pSendMessage;
-
 			//判断队列是否是已经最大
 			int nQueueCount = (int)msg_queue()->message_count();
 			if(nQueueCount >= (int)MAX_MSG_THREADQUEUE)
@@ -1885,7 +1844,6 @@ bool CProConnectManager::PostMessageAll( IBuffPacket* pBuffPacket, uint8 u1SendT
 					App_BuffPacketManager::instance()->Delete(pBuffPacket);
 				}
 				m_SendMessagePool.Delete(pSendMessage);
-				mb->release();
 				return false;
 			}
 
@@ -1898,7 +1856,6 @@ bool CProConnectManager::PostMessageAll( IBuffPacket* pBuffPacket, uint8 u1SendT
 					App_BuffPacketManager::instance()->Delete(pBuffPacket);
 				}
 				m_SendMessagePool.Delete(pSendMessage);
-				mb->release();
 				return false;
 			}
 		}

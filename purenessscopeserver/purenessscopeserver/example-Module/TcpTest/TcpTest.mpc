@@ -5,7 +5,10 @@ project(TcpTest):acelib{
   Source_Files{
   	./*.cpp 
   }
-  macros += __LINUX__  
+  specific (gnuace){
+		macros += __LINUX__   
+		compile_flags += -Wno-deprecated
+	}
   
   libout = ./
   specific (prop:microsoft){

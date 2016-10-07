@@ -3,15 +3,13 @@
 
 #include "XmlOpeation.h"
 
-#define PROJECT_FILE_NAME "PlugInInfo.xml"
-
 bool Read_Project_File(const char* pFileName, _Project_Info& objProjectInfo)
 {
 	CXmlOpeation objXmlOpeation;
-	return objXmlOpeation.Parse_XML_File_Project(pFileName, objProjectInfo);
+	return objXmlOpeation.Parse_Plug_In_Project(pFileName, objProjectInfo);
 }
 
-void Gen_2_Cpp_Main(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlInfo)
+void Gen_2_Cpp_Main(_Project_Info& objProjectInfo, vecClassInfo& objClassXmlInfo)
 {
 	char szTemp[200]     = {'\0'};
 	char szPathFile[200] = {'\0'};
@@ -89,7 +87,7 @@ void Gen_2_Cpp_Main(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlInfo)
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "}\n\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-	sprintf_safe(szTemp, 200, "static CBaseCommand g_BaseCommand;\n");
+	sprintf_safe(szTemp, 200, "static CBaseCommand* g_pBaseCommand = NULL;\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "CServerObject*      g_pServerObject = NULL;\n\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
@@ -99,6 +97,16 @@ void Gen_2_Cpp_Main(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlInfo)
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\tg_pServerObject = pServerObject;\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+	sprintf_safe(szTemp, 200, "\tif(NULL != g_pBaseCommand)\n");
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+	sprintf_safe(szTemp, 200, "\t{\n");
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+	sprintf_safe(szTemp, 200, "\t\tSAFE_DELETE(g_pBaseCommand);\n");
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+	sprintf_safe(szTemp, 200, "\t}\n\n");
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+	sprintf_safe(szTemp, 200, "\tg_pBaseCommand = new CBaseCommand();\n\n");
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\tOUR_DEBUG((LM_INFO, \"[%s LoadModuleData] Begin.\\n\"));\n",
 		objProjectInfo.m_szProjectName);
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
@@ -106,7 +114,7 @@ void Gen_2_Cpp_Main(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlInfo)
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\t{\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-	sprintf_safe(szTemp, 200, "\t\tg_BaseCommand.SetServerObject(pServerObject);\n");
+	sprintf_safe(szTemp, 200, "\t\tg_pBaseCommand->SetServerObject(pServerObject);\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\t}\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
@@ -125,22 +133,15 @@ void Gen_2_Cpp_Main(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlInfo)
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\t{\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-	for(int i = 0; i < (int)objvecXmlInfo.size(); i++)
+
+	//添加注册函数
+	for(int i = 0; i < (int)objProjectInfo.m_objCommandList.size(); i++)
 	{
-		if(objvecXmlInfo[i].m_emCommandType == COMMAND_IN)
+		if(strlen(objProjectInfo.m_objCommandList[i].m_szCommandInID) > 0)
 		{
-			if(strlen(objvecXmlInfo[i].m_szMacroName) > 0)
-			{
-				sprintf_safe(szTemp, 200, "\t\tpMessageManager->AddClientCommand((uint16)%s, &g_BaseCommand, g_szName);\n",
-					objvecXmlInfo[i].m_szMacroName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-			}
-			else
-			{
-				sprintf_safe(szTemp, 200, "\t\tpMessageManager->AddClientCommand((uint16)%d, &g_BaseCommand, g_szName);\n",
-					objvecXmlInfo[i].m_nCommandID);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-			}
+			sprintf_safe(szTemp, 200, "\t\tpMessageManager->AddClientCommand((uint16)%s, g_pBaseCommand, g_szName);\n",
+				objProjectInfo.m_objCommandList[i].m_szCommandInID);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 		}
 	}
 	sprintf_safe(szTemp, 200, "\t}\n");
@@ -202,27 +203,22 @@ void Gen_2_Cpp_Main(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlInfo)
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\t\t{\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-	for(int i = 0; i < (int)objvecXmlInfo.size(); i++)
+
+	//添加注销函数
+	for(int i = 0; i < (int)objProjectInfo.m_objCommandList.size(); i++)
 	{
-		if(objvecXmlInfo[i].m_emCommandType == COMMAND_IN)
+		if(strlen(objProjectInfo.m_objCommandList[i].m_szCommandInID) > 0)
 		{
-			if(strlen(objvecXmlInfo[i].m_szMacroName) > 0)
-			{
-				sprintf_safe(szTemp, 200, "\t\t\tpMessageManager->DelClientCommand((uint16)%s, &g_BaseCommand);\n",
-					objvecXmlInfo[i].m_szMacroName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-			}
-			else
-			{
-				sprintf_safe(szTemp, 200, "\t\t\tpMessageManager->DelClientCommand((uint16)%d, &g_BaseCommand);\n",
-					objvecXmlInfo[i].m_nCommandID);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-			}
+			sprintf_safe(szTemp, 200, "\t\t\tpMessageManager->DelClientCommand((uint16)%s, g_pBaseCommand);\n",
+				objProjectInfo.m_objCommandList[i].m_szCommandInID);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 		}
 	}
 	sprintf_safe(szTemp, 200, "\t\t\tpMessageManager = NULL;\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\t\t}\n");
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+	sprintf_safe(szTemp, 200, "\t\tSAFE_DELETE(g_pBaseCommand);\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\t}\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
@@ -281,7 +277,7 @@ void Gen_2_Cpp_Main(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlInfo)
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\t\t\tu4ErrorID));\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-	sprintf_safe(szTemp, 200, "\treturn 0;\n");
+	sprintf_safe(szTemp, 200, "\treturn true;\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "}\n\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);

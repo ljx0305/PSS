@@ -108,6 +108,7 @@ CLogManager::CLogManager(void)
 	m_nThreadCount  = 1;
 	m_nQueueMax     = MAX_MSG_THREADQUEUE;
 	m_pServerLogger = NULL;
+	m_blIsMail      = false;
 }
 
 CLogManager::~CLogManager(void)
@@ -160,12 +161,10 @@ int CLogManager::svc(void)
 		if (!pLogBlockInfo)
 		{
 			OUR_DEBUG((LM_ERROR,"[CLogManager::svc] CLogManager mb log == NULL!\n"));
-			mb->release();
 			continue;
 		}
 
 		ProcessLog(pLogBlockInfo);
-		mb->release();
 		//OUR_DEBUG((LM_ERROR,"[CLogManager::svc] delete pstrLogText BEGIN!\n"));
 		//回收日志块
 		m_objLogBlockPool.ReturnBlockInfo(pLogBlockInfo);
@@ -187,10 +186,14 @@ int CLogManager::Close()
 	return 0;
 }
 
-void CLogManager::Init(int nThreadCount, int nQueueMax)
+void CLogManager::Init(int nThreadCount, int nQueueMax, uint32 u4MailID)
 {
 	m_nThreadCount = nThreadCount;
 	m_nQueueMax    = nQueueMax;
+	if(u4MailID > 0)
+	{
+		m_blIsMail = true;
+	}
 }
 
 int CLogManager::Start()
@@ -220,7 +223,7 @@ bool CLogManager::IsRun()
 
 int CLogManager::PutLog(_LogBlockInfo* pLogBlockInfo)
 {
-	ACE_Message_Block* mb = NULL;
+	ACE_Message_Block* mb = pLogBlockInfo->GetQueueMessage();
 
 	//如果正在重新加载
 	if(m_blIsNeedReset == true)
@@ -230,35 +233,14 @@ int CLogManager::PutLog(_LogBlockInfo* pLogBlockInfo)
 		return 0;
 	}
 
-	ACE_NEW_MALLOC_NORETURN (mb,
-		static_cast<ACE_Message_Block*>(_log_service_mb_allocator.malloc (sizeof (ACE_Message_Block))),
-		ACE_Message_Block
-		(	sizeof(ACE_TString *), // size
-		0,
-		0,
-		0,
-		&_log_service_mb_allocator, // allocator_strategy
-		0, // locking strategy
-		ACE_DEFAULT_MESSAGE_BLOCK_PRIORITY, // priority
-		ACE_Time_Value::zero,
-		ACE_Time_Value::max_time,
-		&_log_service_mb_allocator,
-		&_log_service_mb_allocator
-		)
-		);		
-
 	if(mb)
 	{
-		_LogBlockInfo** loadin = (_LogBlockInfo **)mb->base();
-		*loadin = pLogBlockInfo;
-
 		int msgcount = (int)msg_queue()->message_count();
 		if (msgcount >= m_nQueueMax) 
 		{
 			OUR_DEBUG((LM_INFO,"[CLogManager::PutLog] CLogManager queue is full!\n"));
 			//回收日志块
 			m_objLogBlockPool.ReturnBlockInfo(pLogBlockInfo);
-			mb->release();
 			return 1;
 		}
 		ACE_Time_Value xtime;
@@ -268,7 +250,6 @@ int CLogManager::PutLog(_LogBlockInfo* pLogBlockInfo)
 			OUR_DEBUG((LM_ERROR,"[CLogManager::PutLog] CLogManager putq error(%s)!\n", pLogBlockInfo->m_pBlock));
 			//回收日志块
 			m_objLogBlockPool.ReturnBlockInfo(pLogBlockInfo);
-			mb->release();
 			return -1;
 		}
 		return 0;
@@ -432,7 +413,15 @@ int CLogManager::WriteToMail( int nLogType, uint32 u4MailID, char* pTitle, const
 
 	pLogBlockInfo->m_u4Length = (uint32)strlen(pLogBlockInfo->m_pBlock);
 	pLogBlockInfo->m_u4LogID  = (uint32)nLogType;
-	pLogBlockInfo->m_u4MailID = u4MailID;
+	if(m_blIsMail == false)
+	{
+		pLogBlockInfo->m_u4MailID = 0;
+	}
+	else
+	{
+		pLogBlockInfo->m_u4MailID = u4MailID;
+	}
+	
 	ACE_OS::sprintf(pLogBlockInfo->m_szMailTitle, "%s", pTitle);
 
 	if (IsRun()) 

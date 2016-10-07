@@ -6,8 +6,6 @@
 
 #include "MessageService.h"
 
-Mutex_Allocator _msg_service_mb_allocator;
-
 CMessageService::CMessageService()
 {
     m_u4ThreadID      = 0;
@@ -168,13 +166,12 @@ int CMessageService::svc(void)
         if(! msg)
         {
             OUR_DEBUG((LM_ERROR,"[CMessageService::svc] mb msg == NULL CurrthreadNo=[%d]!\n", m_u4ThreadID));
-            mb->release();
             continue;
         }
 
         this->ProcessMessage(msg, m_u4ThreadID);
 
-        mb->release();
+		//使用内存池，这块内存不必再释放
     }
 
     OUR_DEBUG((LM_INFO,"[CMessageService::svc] svc finish!\n"));
@@ -184,35 +181,16 @@ int CMessageService::svc(void)
 bool CMessageService::PutMessage(CMessage* pMessage)
 {
 
-    ACE_Message_Block* mb = NULL;
-
-    ACE_NEW_MALLOC_NORETURN(mb,
-                            static_cast<ACE_Message_Block*>(_msg_service_mb_allocator.malloc(sizeof(ACE_Message_Block))),
-                            ACE_Message_Block(sizeof(CMessage*), // size
-                                    ACE_Message_Block::MB_DATA, // type
-                                    0,
-                                    0,
-                                    &_msg_service_mb_allocator, // allocator_strategy
-                                    0, // locking strategy
-                                    ACE_DEFAULT_MESSAGE_BLOCK_PRIORITY, // priority
-                                    ACE_Time_Value::zero,
-                                    ACE_Time_Value::max_time,
-                                    &_msg_service_mb_allocator,
-                                    &_msg_service_mb_allocator
-                                             ));
+    ACE_Message_Block* mb = pMessage->GetQueueMessage();
 
     if(NULL != mb)
     {
-        CMessage** ppMessage = (CMessage**)mb->base();
-        *ppMessage = pMessage;
-
         //判断队列是否是已经最大
         int nQueueCount = (int)msg_queue()->message_count();
 
         if(nQueueCount >= (int)m_u4MaxQueue)
         {
             OUR_DEBUG((LM_ERROR,"[CMessageService::PutMessage] Queue is Full nQueueCount = [%d].\n", nQueueCount));
-            mb->release();
             return false;
         }
 
@@ -221,7 +199,6 @@ bool CMessageService::PutMessage(CMessage* pMessage)
         if(this->putq(mb, &xtime) == -1)
         {
             OUR_DEBUG((LM_ERROR,"[CMessageService::PutMessage] Queue putq  error nQueueCount = [%d] errno = [%d].\n", nQueueCount, errno));
-            mb->release();
             return false;
         }
     }

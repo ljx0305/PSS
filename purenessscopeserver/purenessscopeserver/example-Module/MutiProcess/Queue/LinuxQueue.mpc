@@ -7,7 +7,14 @@ project(LinuxQueue):acelib{
   	./*.cpp 
 	../Common/*.cpp
   }
-  macros += __LINUX__    
+  specific (gnuace){
+		macros += __LINUX__   
+		compile_flags += -Wno-deprecated
+	}
+	
+  specific(make) {
+    compile_flags += -fcheck-new
+  }
   
   specific (prop:microsoft){
 	dllout = ../../../PurenessScopeServer/Windows_Bin

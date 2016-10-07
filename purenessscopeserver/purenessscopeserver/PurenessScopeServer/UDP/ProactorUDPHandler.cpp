@@ -116,7 +116,7 @@ void CProactorUDPHandler::handle_read_dgram(const ACE_Asynch_Read_Dgram::Result&
 		OUR_DEBUG((LM_INFO, "[CProactorUDPHandler::handle_read_dgram]result.bytes_transferred() is 0.\n"));
 	}
 
-	pMb->release();
+	App_MessageBlockManager::instance()->Close(pMb);
 	pMBBuff = App_MessageBlockManager::instance()->Create(MAX_UDP_PACKET_LEN);
 
 	if(NULL == pMBBuff)
@@ -176,7 +176,7 @@ bool CProactorUDPHandler::SendMessage(const char* pMessage, uint32 u4Len, const 
 			m_CommandAccount.SaveCommandData(u2CommandID, u4SendCost, PACKET_UDP, u4Len, u4DataLen, COMMAND_TYPE_OUT);
 
 			//释放发送体
-			pMbData->release();
+			App_MessageBlockManager::instance()->Close(pMbData);
 
 			return true;
 		}
@@ -186,7 +186,7 @@ bool CProactorUDPHandler::SendMessage(const char* pMessage, uint32 u4Len, const 
 			SAFE_DELETE_ARRAY(pMessage);
 
 			//释放发送体
-			pMbData->release();
+			App_MessageBlockManager::instance()->Close(pMbData);
 
 			return false;
 		}
@@ -235,6 +235,7 @@ _ClientConnectInfo CProactorUDPHandler::GetClientConnectInfo()
 
 bool CProactorUDPHandler::CheckMessage(ACE_Message_Block* pMbData, uint32 u4Len)
 {
+	ACE_Time_Value tvCheck = ACE_OS::gettimeofday();
 	if(NULL == m_pPacketParse || NULL == pMbData)
 	{
 		return false;
@@ -256,7 +257,7 @@ bool CProactorUDPHandler::CheckMessage(ACE_Message_Block* pMbData, uint32 u4Len)
 		bool blStateHead = App_PacketParseLoader::instance()->GetPacketParseInfo()->Parse_Packet_Head_Info(0, pMBHead, App_MessageBlockManager::instance(), &obj_Head_Info);
 		if(false == blStateHead)
 		{
-			pMBHead->release();
+			App_MessageBlockManager::instance()->Close(pMbData);
 			App_PacketParsePool::instance()->Delete(m_pPacketParse);
 			return false;
 		}
@@ -272,7 +273,7 @@ bool CProactorUDPHandler::CheckMessage(ACE_Message_Block* pMbData, uint32 u4Len)
 
 		if(u4Len != m_pPacketParse->GetPacketHeadSrcLen() + m_pPacketParse->GetPacketBodySrcLen())
 		{
-			pMBHead->release();
+			App_MessageBlockManager::instance()->Close(pMBHead);
 			App_PacketParsePool::instance()->Delete(m_pPacketParse);
 			return false;
 		}
@@ -290,8 +291,8 @@ bool CProactorUDPHandler::CheckMessage(ACE_Message_Block* pMbData, uint32 u4Len)
 			bool blStateBody = App_PacketParseLoader::instance()->GetPacketParseInfo()->Parse_Packet_Body_Info(0, pMBBody, App_MessageBlockManager::instance(), &obj_Body_Info);
 			if(false  == blStateBody)
 			{
-				pMBHead->release();
-				pMBBody->release();
+				App_MessageBlockManager::instance()->Close(pMBHead);
+				App_MessageBlockManager::instance()->Close(pMBBody);
 				App_PacketParsePool::instance()->Delete(m_pPacketParse);
 				return false;
 			}
@@ -309,7 +310,7 @@ bool CProactorUDPHandler::CheckMessage(ACE_Message_Block* pMbData, uint32 u4Len)
 		objMakePacket.m_PacketType        = PACKET_UDP;
 
 		//UDP因为不是面向链接的
-		if(false == App_MakePacket::instance()->PutUDPMessageBlock(m_addrRemote, PACKET_PARSE, &objMakePacket))
+		if(false == App_MakePacket::instance()->PutUDPMessageBlock(m_addrRemote, PACKET_PARSE, &objMakePacket, tvCheck))
 		{
 			OUR_DEBUG((LM_ERROR, "[CProactorUDPHandler::SendMessage]PutMessageBlock is error.\n"));
 			App_PacketParsePool::instance()->Delete(m_pPacketParse);
@@ -337,7 +338,7 @@ bool CProactorUDPHandler::CheckMessage(ACE_Message_Block* pMbData, uint32 u4Len)
 			objMakePacket.m_PacketType        = PACKET_UDP;
 
 			//UDP因为不是面向链接的
-			if(false == App_MakePacket::instance()->PutUDPMessageBlock(m_addrRemote, PACKET_PARSE, &objMakePacket))
+			if(false == App_MakePacket::instance()->PutUDPMessageBlock(m_addrRemote, PACKET_PARSE, &objMakePacket, tvCheck))
 			{
 				App_PacketParsePool::instance()->Delete(m_pPacketParse);
 				OUR_DEBUG((LM_ERROR, "[CProactorUDPHandler::SendMessage]PutMessageBlock is error.\n"));

@@ -14,6 +14,13 @@ CMessage::CMessage(void)
 	m_szError[0]    = '\0';
 
 	m_pMessageBase = new _MessageBase();
+
+	//这里设置消息队列模块指针内容，这样就不必反复的new和delete，提升性能
+	//指针关系也可以在这里直接指定，不必使用的使用再指定
+	m_pmbQueuePtr  = new ACE_Message_Block(sizeof(CMessage*));
+
+	CMessage** ppMessage = (CMessage**)m_pmbQueuePtr->base();
+	*ppMessage = this;
 }
 
 CMessage::~CMessage(void)
@@ -26,6 +33,11 @@ CMessage::~CMessage(void)
 const char* CMessage::GetError()
 {
 	return m_szError;
+}
+
+ACE_Message_Block* CMessage::GetQueueMessage()
+{
+	return m_pmbQueuePtr;
 }
 
 void CMessage::SetMessageBase(_MessageBase* pMessageBase)
@@ -94,14 +106,20 @@ void CMessage::Close()
 
 	if(NULL != m_pmbHead)
 	{
-		m_pmbHead->release();
+		App_MessageBlockManager::instance()->Close(m_pmbHead);
 		m_pmbHead = NULL;
 	}
 
 	if(NULL != m_pmbBody)
 	{
-		m_pmbBody->release();
+		App_MessageBlockManager::instance()->Close(m_pmbBody);
 		m_pmbBody = NULL;
+	}
+
+	if(NULL != m_pmbQueuePtr)
+	{
+		m_pmbQueuePtr->release();
+		m_pmbQueuePtr = NULL;
 	}
 }
 

@@ -3,7 +3,7 @@
 
 #include "XmlOpeation.h"
 
-void Gen_2_Cpp_Command_H(_Project_Info& objProjectInfo)
+void Gen_2_Cpp_Command_H(_Project_Info& objProjectInfo, vecClassInfo& objvecClassInfo)
 {
 	char szTemp[200]     = {'\0'};
 	char szPathFile[200] = {'\0'};
@@ -17,6 +17,14 @@ void Gen_2_Cpp_Command_H(_Project_Info& objProjectInfo)
 	{
 		return;
 	}
+
+	//将类名转换成大写
+	char szHText[100] = {'\0'};
+	To_Upper_String(objProjectInfo.m_szProjectName, szHText);
+	sprintf_safe(szTemp, 200, "#ifndef _%s_COMMAND_H\n", szHText);
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+	sprintf_safe(szTemp, 200, "#define _%s_COMMAND_H\n\n", szHText);
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 
 	sprintf_safe(szTemp, 200, "#pragma once\n\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
@@ -52,13 +60,35 @@ void Gen_2_Cpp_Command_H(_Project_Info& objProjectInfo)
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "\tvoid SetServerObject(CServerObject* pServerObject);\n\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-	sprintf_safe(szTemp, 200, "private:\n");
+	sprintf_safe(szTemp, 200, "public:\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	for(int i = 0; i < (int)objProjectInfo.m_objCommandList.size(); i++)
 	{
-		sprintf_safe(szTemp, 200, "\tint %s(IMessage* pMessage);\n", 
-			objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
-		fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+		if(strlen(objProjectInfo.m_objCommandList[i].m_szCommandInID) > 0)
+		{
+			sprintf_safe(szTemp, 200, "\tint %s(IMessage* pMessage);\n", 
+				objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+		}
+		else
+		{
+			char* pObjectRetun = NULL;
+			for(int j = 0; j < (int)objProjectInfo.m_objCommandList[i].m_vecObjectInfo.size(); j++)
+			{
+				if(objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_emPacketType == PACKET_TYPE_RETURN)
+				{
+					pObjectRetun = objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName;
+					break;
+				}
+			}
+
+			//只属于输出函数
+			sprintf_safe(szTemp, 200, "\tint %s(uint32 u4ConnectID, %s obj%s);\n",
+				objProjectInfo.m_objCommandList[i].m_szCommandFuncName,
+				pObjectRetun, 
+				pObjectRetun);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+		}
 	}
 	sprintf_safe(szTemp, 200, "\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
@@ -70,23 +100,12 @@ void Gen_2_Cpp_Command_H(_Project_Info& objProjectInfo)
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	sprintf_safe(szTemp, 200, "};\n");
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+	sprintf_safe(szTemp, 200, "#endif\n\n");
+	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	fclose(pFile);
 }
 
-_Xml_Info* Find_Xml_StructInfo(int nCommandID, vecXmlInfo& objvecXmlInfo)
-{
-	for(int i = 0; i < (int)objvecXmlInfo.size(); i++)
-	{
-		if(objvecXmlInfo[i].m_nCommandID == nCommandID)
-		{
-			return &objvecXmlInfo[i];
-		}
-	}
-
-	return NULL;
-}
-
-void Gen_2_Cpp_Command_Cpp(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlInfo)
+void Gen_2_Cpp_Command_Cpp(_Project_Info& objProjectInfo, vecClassInfo& objvecClassInfo)
 {
 	char szTemp[200]     = {'\0'};
 	char szPathFile[200] = {'\0'};
@@ -155,23 +174,13 @@ void Gen_2_Cpp_Command_Cpp(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlI
 	fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	for(int i = 0; i < (int)objProjectInfo.m_objCommandList.size(); i++)
 	{
-		_Xml_Info* pXmlInfo = Find_Xml_StructInfo(objProjectInfo.m_objCommandList[i].m_nCommandInID, objvecXmlInfo);
-		if(NULL != pXmlInfo)
+		if(strlen(objProjectInfo.m_objCommandList[i].m_szCommandInID) > 0)
 		{
-			if(strlen(pXmlInfo->m_szMacroName) > 0)
-			{
-				sprintf_safe(szTemp, 200, "\tMESSAGE_FUNCTION((uint16)%s,  %s, pMessage);\n",
-					pXmlInfo->m_szMacroName,
-					objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-			}
-			else
-			{
-				sprintf_safe(szTemp, 200, "\tMESSAGE_FUNCTION((uint16)%d,  %s, pMessage);\n",
-					objProjectInfo.m_objCommandList[i].m_nCommandInID,
-					objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-			}
+			sprintf_safe(szTemp, 200, "\tMESSAGE_FUNCTION((uint16)%s,  %s, pMessage);\n",
+				objProjectInfo.m_objCommandList[i].m_szCommandInID,
+				objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
 		}
 	}
 	sprintf_safe(szTemp, 200, "\tMESSAGE_FUNCTION_END;\n\n");
@@ -185,143 +194,265 @@ void Gen_2_Cpp_Command_Cpp(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlI
 
 	for(int i = 0; i < (int)objProjectInfo.m_objCommandList.size(); i++)
 	{
-		sprintf_safe(szTemp, 200, "int CBaseCommand::%s(IMessage* pMessage)\n",
-			objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
-		fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-		sprintf_safe(szTemp, 200, "{\n");
-		fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-
-		if(objProjectInfo.m_objCommandList[i].m_nCommandInID > 0)
+		if(strlen(objProjectInfo.m_objCommandList[i].m_szCommandInID) > 0)
 		{
-			_Xml_Info* pXmlInfo = Find_Xml_StructInfo(objProjectInfo.m_objCommandList[i].m_nCommandInID, objvecXmlInfo);
-			if(NULL != pXmlInfo)
+			sprintf_safe(szTemp, 200, "int CBaseCommand::%s(IMessage* pMessage)\n",
+				objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "{\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
+			//包头
+			sprintf_safe(szTemp, 200, "\tIBuffPacket* pHeadPacket = m_pServerObject->GetPacketManager()->Create();\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\tif(NULL == pHeadPacket)\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t{\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t\tOUR_DEBUG((LM_ERROR, \"[CBaseCommand::%s] pHeadPacket is NULL.\\n\"));\n",
+				objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t\treturn -1;\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t}\n\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
+			//包体
+			sprintf_safe(szTemp, 200, "\tIBuffPacket* pBodyPacket = m_pServerObject->GetPacketManager()->Create();\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\tif(NULL == pBodyPacket)\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t{\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t\tOUR_DEBUG((LM_ERROR, \"[CBaseCommand::%s] pBodyPacket is NULL.\\n\"));\n",
+				objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t\treturn -1;\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t}\n\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
+			sprintf_safe(szTemp, 200, "\t_PacketInfo objHeadPacket;\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t_PacketInfo objBodyPacket;\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\tpMessage->GetPacketHead(objHeadPacket);\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\tpMessage->GetPacketBody(objBodyPacket);\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
+			sprintf_safe(szTemp, 200, "\tpHeadPacket->WriteStream(objHeadPacket.m_pData, objHeadPacket.m_nDataLen);\n\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\tpBodyPacket->WriteStream(objBodyPacket.m_pData, objBodyPacket.m_nDataLen);\n\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
+			//解析包头
+			char* pHeadClassName = NULL;
+			for(int j = 0; j < (int)objProjectInfo.m_objCommandList[i].m_vecObjectInfo.size(); j++)
 			{
-				sprintf_safe(szTemp, 200, "\tIBuffPacket* pRecvPacket = m_pServerObject->GetPacketManager()->Create();\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\tif(NULL == pRecvPacket)\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t{\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\tOUR_DEBUG((LM_ERROR, \"[CBaseCommand::%s] pRecvPacket is NULL.\\n\"));\n",
-					objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\treturn -1;\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t}\n\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t_PacketInfo objRecvPacket;\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\tpMessage->GetPacketBody(objRecvPacket);\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\tpRecvPacket->WriteStream(objRecvPacket.m_pData, objRecvPacket.m_nDataLen);\n\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t%s obj%s;\n",
-					pXmlInfo->m_szXMLName,
-					pXmlInfo->m_szXMLName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t%s_Out_Stream(obj%s, pRecvPacket);\n",
-					pXmlInfo->m_szXMLName,
-					pXmlInfo->m_szXMLName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\tm_pServerObject->GetPacketManager()->Delete(pRecvPacket);\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\tbool blState = false;\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				if(objProjectInfo.m_objCommandList[i].m_nCommandOutID > 0)
+				if(objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_emPacketType == PACKET_TYPE_HEAD)
 				{
-					_Xml_Info* pXmlOut = Find_Xml_StructInfo(objProjectInfo.m_objCommandList[i].m_nCommandOutID, objvecXmlInfo);
-					if(NULL != pXmlOut)
+					sprintf_safe(szTemp, 200, "\t%s obj%s;\n",
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName,
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t%s_Out_Stream(obj%s, pHeadPacket);\n",
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName,
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					pHeadClassName = objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName;
+					break;
+				}
+			}
+
+			//解析包体
+			char* pBodyClassName = NULL;
+			for(int j = 0; j < (int)objProjectInfo.m_objCommandList[i].m_vecObjectInfo.size(); j++)
+			{
+				if(objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_emPacketType == PACKET_TYPE_BODY)
+				{
+					sprintf_safe(szTemp, 200, "\t%s obj%s;\n",
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName,
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t%s_Out_Stream(obj%s, pBodyPacket);\n",
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName,
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					pBodyClassName = objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName;
+					break;
+				}
+			}
+
+			sprintf_safe(szTemp, 200, "\tm_pServerObject->GetPacketManager()->Delete(pHeadPacket);\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\tm_pServerObject->GetPacketManager()->Delete(pBodyPacket);\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\tbool blState = false;\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			if(strlen(objProjectInfo.m_objCommandList[i].m_szCommandOutID) > 0)
+			{
+				//拼接返回包体声明
+				for(int j = 0; j < (int)objProjectInfo.m_objCommandList[i].m_vecObjectInfo.size(); j++)
+				{
+					//寻找是否有返回包体
+					if(objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_emPacketType == PACKET_TYPE_RETURN)
 					{
-						sprintf_safe(szTemp, 200, "\t%s obj%s;\n",
-							pXmlOut->m_szXMLName,
-							pXmlOut->m_szXMLName);
+						if(pHeadClassName != NULL && pBodyClassName != NULL)
+						{
+							sprintf_safe(szTemp, 200, "\t%s obj%s;\n",
+								objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName,
+								objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+							fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
+							sprintf_safe(szTemp, 200, "\tblState = Logic_%s(m_pServerObject, pMessage->GetMessageBase()->m_u4ConnectID, obj%s, obj%s, obj%s);\n",
+								objProjectInfo.m_objCommandList[i].m_szCommandFuncName, 
+								pHeadClassName,
+								pBodyClassName,
+								objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+							fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+						}
+						else
+						{
+							sprintf_safe(szTemp, 200, "\t%s obj%s;\n",
+								objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName,
+								objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+							fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
+							sprintf_safe(szTemp, 200, "\tblState = Logic_%s(m_pServerObject, pMessage->GetMessageBase()->m_u4ConnectID, obj%s, obj%s);\n",
+								objProjectInfo.m_objCommandList[i].m_szCommandFuncName,
+								pHeadClassName,
+								objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+							fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+						}
+						break;
+					}
+				}
+			}
+			else
+			{
+				if(pHeadClassName != NULL && pBodyClassName != NULL)
+				{
+					sprintf_safe(szTemp, 200, "\tblState = Logic_%s(m_pServerObject, pMessage->GetMessageBase()->m_u4ConnectID, obj%s, obj%s);\n", 
+						objProjectInfo.m_objCommandList[i].m_szCommandFuncName,
+						pHeadClassName,
+						pBodyClassName);
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+				}
+				else
+				{
+					if(pHeadClassName != NULL)
+					{
+						sprintf_safe(szTemp, 200, "\tblState = Logic_%s(m_pServerObject, pMessage->GetMessageBase()->m_u4ConnectID, obj%s);\n", 
+							objProjectInfo.m_objCommandList[i].m_szCommandFuncName,
+							pHeadClassName);
 						fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-						sprintf_safe(szTemp, 200, "\tblState = Logic_%s(obj%s, obj%s);\n",
-							pXmlInfo->m_szXMLName,
-							pXmlInfo->m_szXMLName,
-							pXmlOut->m_szXMLName);
+					}
+					else
+					{
+						sprintf_safe(szTemp, 200, "\tblState = Logic_%s(m_pServerObject, pMessage->GetMessageBase()->m_u4ConnectID);\n", 
+							objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
 						fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 					}
 				}
-				else
-				{
-					sprintf_safe(szTemp, 200, "\tblState = Logic_%s(obj%s);\n", 
-						pXmlInfo->m_szXMLName,
-						pXmlInfo->m_szXMLName);
-					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				}
-				sprintf_safe(szTemp, 200, "\tif(false == blState)\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t{\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\treturn -1;\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t}\n\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 			}
+			sprintf_safe(szTemp, 200, "\tif(false == blState)\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t{\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t\treturn -1;\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "\t}\n\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+		}
+		else
+		{
+			char* pObjectRetun = NULL;
+			for(int j = 0; j < (int)objProjectInfo.m_objCommandList[i].m_vecObjectInfo.size(); j++)
+			{
+				if(objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_emPacketType == PACKET_TYPE_RETURN)
+				{
+					pObjectRetun = objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName;
+					break;
+				}
+			}
+
+			//只属于输出函数
+			sprintf_safe(szTemp, 200, "int CBaseCommand::%s(uint32 u4ConnectID, %s obj%s)\n",
+				objProjectInfo.m_objCommandList[i].m_szCommandFuncName,
+				pObjectRetun, 
+				pObjectRetun);
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+			sprintf_safe(szTemp, 200, "{\n");
+			fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 		}
 
-		if(objProjectInfo.m_objCommandList[i].m_nCommandOutID > 0)
+		if(strlen(objProjectInfo.m_objCommandList[i].m_szCommandOutID) > 0)
 		{
-			_Xml_Info* pXmlInfo = Find_Xml_StructInfo(objProjectInfo.m_objCommandList[i].m_nCommandOutID, objvecXmlInfo);
-			if(NULL != pXmlInfo)
+			for(int j = 0; j < (int)objProjectInfo.m_objCommandList[i].m_vecObjectInfo.size(); j++)
 			{
-				sprintf_safe(szTemp, 200, "\tIBuffPacket* pSendPacket = m_pServerObject->GetPacketManager()->Create();\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\tif(NULL == pSendPacket)\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t{\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\tOUR_DEBUG((LM_ERROR, \"[CBaseCommand::%s] pSendPacket is NULL.\\n\"));\n",
-					objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\treturn -1;\n\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t}\n\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t%s_In_Stream(obj%s, pSendPacket);\n\n",
-					pXmlInfo->m_szXMLName,
-					pXmlInfo->m_szXMLName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				//发送数据
-				sprintf_safe(szTemp, 200, "\tif(NULL != m_pServerObject->GetConnectManager())\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t{\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);;
-				sprintf_safe(szTemp, 200, "\t\tm_pServerObject->GetConnectManager()->PostMessage((uint16)%d,\n",
-					objProjectInfo.m_objCommandList[i].m_nCommandOutID);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\t\tpSendPacket,\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				if(objProjectInfo.m_objCommandList[i].m_nOutPcket == 1)
+				if(objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_emPacketType == PACKET_TYPE_RETURN)
 				{
+					sprintf_safe(szTemp, 200, "\tIBuffPacket* pSendPacket = m_pServerObject->GetPacketManager()->Create();\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\tif(NULL == pSendPacket)\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t{\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t\tOUR_DEBUG((LM_ERROR, \"[CBaseCommand::%s] pSendPacket is NULL.\\n\"));\n",
+						objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t\treturn -1;\n\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t}\n\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t%s_In_Stream(obj%s, pSendPacket);\n\n",
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName,
+						objProjectInfo.m_objCommandList[i].m_vecObjectInfo[j].m_szClassName);
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					//发送数据
+					sprintf_safe(szTemp, 200, "\tif(NULL != m_pServerObject->GetConnectManager())\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t{\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					if(strlen(objProjectInfo.m_objCommandList[i].m_szCommandInID) == 0)
+					{
+						sprintf_safe(szTemp, 200, "\t\tm_pServerObject->GetConnectManager()->PostMessage(u4ConnectID,\n");
+						fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					}
+					else
+					{
+						sprintf_safe(szTemp, 200, "\t\tm_pServerObject->GetConnectManager()->PostMessage(pMessage->GetMessageBase()->m_u4ConnectID,\n");
+						fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					}
+
+					sprintf_safe(szTemp, 200, "\t\t\tpSendPacket,\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+
 					sprintf_safe(szTemp, 200, "\t\t\tSENDMESSAGE_JAMPNOMAL,\n");
 					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				}
-				else
-				{
-					sprintf_safe(szTemp, 200, "\t\t\tSENDMESSAGE_NOMAL,\n");
+	
+					sprintf_safe(szTemp, 200, "\t\t\t(uint16)%s,\n", 
+						objProjectInfo.m_objCommandList[i].m_szCommandOutID);
+					sprintf_safe(szTemp, 200, "\t\t\tPACKET_SEND_IMMEDIATLY,\n");
 					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t\t\tPACKET_IS_FRAMEWORK_RECYC);\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t}\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\telse\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t{\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t\tOUR_DEBUG((LM_INFO, \"[CBaseCommand::%s] m_pConnectManager = NULL.\\n\"));\n",
+						objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t\tm_pServerObject->GetPacketManager()->Delete(pSendPacket);\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					sprintf_safe(szTemp, 200, "\t}\n\n");
+					fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
+					break;
 				}
-				sprintf_safe(szTemp, 200, "\t\t\t(uint16)%d,\n", 
-					objProjectInfo.m_objCommandList[i].m_nCommandOutID);
-				sprintf_safe(szTemp, 200, "\t\t\tPACKET_SEND_IMMEDIATLY,\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\t\tPACKET_IS_FRAMEWORK_RECYC);\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t}\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\telse\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t{\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\tOUR_DEBUG((LM_INFO, \"[CBaseCommand::%s] m_pConnectManager = NULL.\\n\"));\n",
-					objProjectInfo.m_objCommandList[i].m_szCommandFuncName);
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t\tm_pServerObject->GetPacketManager()->Delete(pSendPacket);\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
-				sprintf_safe(szTemp, 200, "\t}\n\n");
-				fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 			}
 		}
 		sprintf_safe(szTemp, 200, "\treturn 0;\n");
@@ -329,6 +460,7 @@ void Gen_2_Cpp_Command_Cpp(_Project_Info& objProjectInfo, vecXmlInfo& objvecXmlI
 		sprintf_safe(szTemp, 200, "}\n\n");
 		fwrite(szTemp, strlen(szTemp), sizeof(char), pFile);
 	}
+	
 
 	fclose(pFile);
 }
